@@ -27,7 +27,6 @@ from pathlib import Path
 import re
 import struct
 import sys
-import zlib
 
 
 def _configure_stdio() -> None:
@@ -511,6 +510,32 @@ def _png_chunk(kind: bytes, payload: bytes) -> bytes:
     return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
 
 
+def zlib_stored_stream(data: bytes) -> bytes:
+    """Return a cross-platform deterministic zlib stream using stored blocks.
+
+    ``zlib.compress`` can emit different DEFLATE bytes across zlib releases
+    even when the decompressed pixels are identical. PNG permits uncompressed
+    DEFLATE blocks, whose byte representation is simple and fully specified.
+    """
+
+    stream = bytearray(b"\x78\x01")  # deflate, 32K window, fastest/no compression
+    blocks = [data[index : index + 65535] for index in range(0, len(data), 65535)]
+    if not blocks:
+        blocks = [b""]
+    for index, block in enumerate(blocks):
+        stream.append(1 if index == len(blocks) - 1 else 0)  # BFINAL, BTYPE=00
+        length = len(block)
+        stream.extend(struct.pack("<HH", length, 0xFFFF - length))
+        stream.extend(block)
+
+    first, second = 1, 0
+    for value in data:
+        first = (first + value) % 65521
+        second = (second + first) % 65521
+    stream.extend(struct.pack(">I", (second << 16) | first))
+    return bytes(stream)
+
+
 def png_rgba(width: int, height: int, pixels: bytearray) -> bytes:
     if len(pixels) != width * height * 4:
         raise AssertionError("RGBA buffer has the wrong size")
@@ -524,7 +549,7 @@ def png_rgba(width: int, height: int, pixels: bytearray) -> bytes:
     return (
         b"\x89PNG\r\n\x1a\n"
         + _png_chunk(b"IHDR", header)
-        + _png_chunk(b"IDAT", zlib.compress(bytes(scanlines), level=9))
+        + _png_chunk(b"IDAT", zlib_stored_stream(bytes(scanlines)))
         + _png_chunk(b"IEND", b"")
     )
 
