@@ -73,7 +73,7 @@ try {
   py -3 tools\modkit.py validate "$project\mods\zh_cn" --strict --base imported
   New-Item -ItemType Directory -Path "$project\dist" -Force | Out-Null
   py -3 tools\modkit.py pack "$project\mods\zh_cn" `
-    -o "$project\dist\zh_cn-0.3.0.zip" --base imported
+    -o "$project\dist\zh_cn-0.3.1.zip" --base imported
 }
 finally {
   Pop-Location

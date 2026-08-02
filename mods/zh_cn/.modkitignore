@@ -2,3 +2,7 @@
 TRANSLATING.md
 assets/font/README.md
 assets/font/fusion-pixel-8px-proportional-zh_hans.bdf
+tests/catalog_ui_strings_test.lua
+tests/starter_dynamic_name_test.lua
+tests/stat_ui_labels_test.lua
+tools/__pycache__/

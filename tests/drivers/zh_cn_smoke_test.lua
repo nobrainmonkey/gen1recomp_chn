@@ -87,6 +87,46 @@ return function(game)
   local Strings = require("src.core.Strings")
   assert(Strings("_OakSpeechText2A") == "_OakSpeechText2A",
          "Oak's Nidorino demo dialogue key was translated instead of its text")
+  local statLabels = {
+    ATTACK = "攻击",
+    DEFENSE = "防御",
+    SPEED = "速度",
+    SPECIAL = "特殊",
+    ACCURACY = "命中率",
+    EVADE = "闪避率",
+  }
+  for source, translated in pairs(statLabels) do
+    assert(Strings(source) == translated,
+           source .. " UI label was not translated")
+    local message = Strings("%s's\n%s rose!", "皮卡丘", source)
+    assert(message:find(translated, 1, true)
+           and not message:find(source, 1, true),
+           source .. " dynamic battle label was not translated")
+  end
+  local nicknameMessage = Strings("%s's\n%s rose!", "ATTACK", "SPEED")
+  assert(nicknameMessage:find("ATTACK", 1, true)
+         and nicknameMessage:find("速度", 1, true)
+         and not nicknameMessage:find("攻击的", 1, true),
+         "a nickname equal to a stat id was rewritten")
+  assert(Strings("OK") == "正常", "healthy status label was not translated")
+
+  local Font = require("src.render.Font")
+  local uiLabel = assert(Font.__zh_cn_translate_ui_label,
+                         "UI label compatibility layer was not installed")
+  assert(uiLabel("ATTACK", "@src/battle/BattleState.lua", 88, 24) == "攻击",
+         "level-up ATTACK label was not translated")
+  assert(uiLabel("ATTACK", "@src/battle/BattleState.lua", 40, 8) == "ATTACK",
+         "battle nickname equal to ATTACK was rewritten")
+  assert(uiLabel("BRN", "@src/ui/SummaryMenu.lua", 128, 48) == "灼伤",
+         "summary status id was not translated")
+  assert(uiLabel("PSN", "@src/ui/PartyMenu.lua", 136, 32) == "中毒",
+         "party status id was not translated")
+  assert(uiLabel(" SLP", "@src/ui/Menu.lua", 16, 16) == " 睡眠",
+         "blackboard status heading was not translated")
+  assert(uiLabel(" QUIT", "@src/ui/Menu.lua", 16, 56) == " 退出",
+         "blackboard quit heading was not translated")
+  assert(uiLabel("ATTACK", "@src/ui/SummaryMenu.lua", 72, 8) == "ATTACK",
+         "summary nickname equal to ATTACK was rewritten")
   local function assertTranslatedText(id, needle)
     local value = game.data.text[id]
     assert(type(value) == "string" and value:find(needle, 1, true),

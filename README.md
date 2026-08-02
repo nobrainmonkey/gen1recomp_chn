@@ -17,8 +17,10 @@ Red、Blue 和 Yellow（皮卡丘版）。
 如果曾在 0.1.50 下导入 Yellow，请升级到 0.1.56+ 后重新导入该 ROM；
 0.1.50 生成的 Yellow 缓存缺少新版运行所需的资源。
 
-本项目不提供 ROM。如果曾安装 0.1.0，请确认 MODS 页显示 0.3.0 或更高
-版本；旧版会让大木博士开场保持英文，并可能在开场流程崩溃。
+本项目不提供 ROM。如果曾安装旧版，请确认 MODS 页显示 0.3.1 或更高
+版本；0.3.1 修复了领取初始／赠送宝可梦时出现英文内部名称，以及属性、
+状态标签仍显示英文的问题。更早的 0.1.0 还会让大木博士开场保持英文，
+并可能在开场流程崩溃。
 
 ## 支持范围
 
@@ -79,8 +81,8 @@ NEW GAME 流程。打包完成后，用仓库自带的白名单工具检查源�
 
 ```powershell
 py -3 .\tools\audit_public_tree.py
-py -3 .\tools\audit_release_zip.py mod .\dist\zh_cn-0.3.0.zip
-py -3 .\tools\audit_release_zip.py source .\dist\gen1recomp_chn-source-0.3.0.zip
+py -3 .\tools\audit_release_zip.py mod .\dist\zh_cn-0.3.1.zip
+py -3 .\tools\audit_release_zip.py source .\dist\gen1recomp_chn-source-0.3.1.zip
 ```
 
 该门禁只允许明确列出的公开源码和资产，并会检查改名 ROM 的 Game Boy 头校验、

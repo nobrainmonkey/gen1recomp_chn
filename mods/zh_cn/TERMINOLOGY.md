@@ -23,6 +23,10 @@ Traditional-Chinese mode or automatic character conversion.
 | Pokédex | 宝可梦图鉴 |
 | Poké Ball | 精灵球 |
 | move | 招式 |
+| HP / PP | HP / PP |
+| Attack / Defense / Speed | 攻击 / 防御 / 速度 |
+| Special (Generation I single stat) | 特殊 |
+| Accuracy / Evasion | 命中率 / 闪避率 |
 | Pokémon Trainer | 宝可梦训练家 |
 | Pokémon Center | 宝可梦中心 |
 | Pokémon Mart | 友好商店 |

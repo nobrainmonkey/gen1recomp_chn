@@ -101,9 +101,88 @@ return function(mod)
   counts.types = each("type_names", function(id, value)
     mod.content.type_chart:patch(id, { name = value })
   end)
+  local statusLabels = catalog("status_labels")
   counts.statuses = each("status_labels", function(id, value)
     mod.content.statuses:patch(id, { label = value, hudLabel = value })
   end)
+
+  -- Some hand-ported scripts fill wNameBuffer with a symbolic data id (for
+  -- example "SQUIRTLE" or "EARTHBADGE").  The catalogues above localize the
+  -- records, but show_text's explicit RAM substitution happens first and
+  -- would otherwise print the raw id.  Use the public command hook only for
+  -- the verified text rows below.  Keeping the routing narrow is important:
+  -- other wNameBuffer users carry actual nicknames or arbitrary values, which
+  -- must be displayed exactly as the player entered them.
+  local speciesGiftTexts = {
+    _OaksLabReceivedMonText = "before_give",    -- Red/Blue: player's starter
+    _OaksLabRivalReceivedMonText = "explicit",  -- Red/Blue: rival's starter
+    _OaksLabReceivedText = "before_give",       -- Yellow: player's Pikachu
+    _GotMonText = "pending",                    -- all versions: gift Eevee
+  }
+  local badgeBufferTexts = {
+    _Route23YouDontHaveTheBadgeYetText = true,
+    _Route23OhThatIsTheBadgeText = true,
+  }
+  mod.hooks:wrap("script.command", function(next, ctx, command, args)
+    -- Red/Blue and Yellow print the starter receipt before give_pokemon.
+    -- Yellow also suppresses AskName, so give_pokemon leaves PIKACHU in this
+    -- per-run context even though no later text consumes it.  Clear only the
+    -- exact value paired with the immediately preceding receipt; if another
+    -- mod transforms the gift to a different species, leave that value alone.
+    local receipt = ctx.__zh_cn_receipt_before_give
+    if command == "give_pokemon" and receipt then
+      ctx.__zh_cn_receipt_before_give = nil
+      local result = next()
+      if type(args) == "table" and args[1] == receipt
+          and ctx.pendingPokemonName == receipt then
+        ctx.pendingPokemonName = nil
+      end
+      return result
+    elseif receipt then
+      -- The marker is deliberately one-command wide.
+      ctx.__zh_cn_receipt_before_give = nil
+    end
+
+    local textId = type(args) == "table" and args[1]
+    local giftMode = speciesGiftTexts[textId]
+    local isBadge = badgeBufferTexts[textId]
+    if command ~= "show_text" or type(args) ~= "table"
+        or (not giftMode and not isBadge) or type(args[2]) ~= "table" then
+      return next()
+    end
+    -- give_pokemon leaves its actual (possibly mod-transformed) species in
+    -- pendingPokemonName for a following received box.  Prefer that over the
+    -- script's authored fallback.  Commands.show_text consumes this field
+    -- after the hook, so localize it too; otherwise it would overwrite our
+    -- forwarded RAM value with the raw id again (the Celadon Eevee path).
+    local pending = giftMode == "pending" and ctx.pendingPokemonName or nil
+    local id = pending or args[2].RAM
+    local registry = isBadge and ctx.game.data.items or ctx.game.data.pokemon
+    local def = type(id) == "string" and registry[id]
+    if not def or type(def.name) ~= "string" or def.name == "" then
+      return next()
+    end
+    if ctx.pendingPokemonName then
+      -- Explicit starter rows must win over a stale player-gift buffer (most
+      -- importantly the rival's counter-pick).  A genuine post-give row uses
+      -- the localized pending value, including a species transformed by a
+      -- different mod's pokemon.before_give handler.
+      ctx.pendingPokemonName = pending and def.name or nil
+    end
+    if giftMode == "before_give" then
+      ctx.__zh_cn_receipt_before_give = id
+    end
+
+    -- Do not mutate the shared script row: another mod may inspect it later,
+    -- and a language mod should only alter this one dispatch.
+    local forwarded = {}
+    for i, value in ipairs(args) do forwarded[i] = value end
+    local substitutions = {}
+    for key, value in pairs(args[2]) do substitutions[key] = value end
+    substitutions.RAM = def.name
+    forwarded[2] = substitutions
+    return next(ctx, command, forwarded)
+  end, 1000)
 
   -- Put the official Chinese character names first while preserving the
   -- original English presets after them. Custom keyboard entry stays Latin.
@@ -176,6 +255,131 @@ return function(mod)
     end
     return out
   end, 1000)
+
+  -- Gen1Recomp 0.1.56 still has a few UI paths that do not send their labels
+  -- through the string/status registries:
+  --   * BattleState's level-up stat box draws ATTACK/... directly;
+  --   * battle/item messages pass the stat name as a raw format argument;
+  --   * SummaryMenu and PartyMenu draw BRN/PSN/... (and OK) directly.
+  -- Keep this compatibility layer exact-value only.  In particular, never
+  -- rewrite arbitrary strings: a player nickname must remain byte-for-byte
+  -- what the player entered.  The normal string catalogue remains the source
+  -- of truth for stat labels, while status_labels.lua remains the source of
+  -- truth for condition labels.
+  do
+    local statLabelSources = {
+      ATTACK = true,
+      DEFENSE = true,
+      SPEED = true,
+      SPECIAL = true,
+      ACCURACY = true,
+      EVADE = true,
+    }
+    -- Only argument 2 is a stat label. Argument 1 is a nickname/trainer name
+    -- and may itself literally be "ATTACK", so it must never be rewritten.
+    local statArgumentPositions = {
+      ["%s's\n%s\ngreatly rose!"] = 2,
+      ["%s's\n%s rose!"] = 2,
+      ["%s's\n%s fell!"] = 2,
+      ["%s's\n%s\ngreatly fell!"] = 2,
+      ["%s's %s\nrose!"] = 2,
+    }
+
+    local okStrings, Strings = pcall(require, "src.core.Strings")
+    if okStrings and type(Strings) == "table"
+        and type(Strings.get) == "function"
+        and type(Strings.lookup) == "function" then
+      -- Strings is callable through its current .get field, so replacing that
+      -- field also covers MoveEffects, ItemEffects, and TrainerAI without
+      -- reaching into their private local tables.  Store the current label set
+      -- on the module so a dev-mode hot reload refreshes the wrapper's data.
+      Strings.__zh_cn_stat_argument_labels = statLabelSources
+      Strings.__zh_cn_stat_argument_positions = statArgumentPositions
+      if not Strings.__zh_cn_stat_argument_compat then
+        local get = Strings.get
+        local unpack_ = unpack or table.unpack
+        Strings.get = function(source, ...)
+          local count = select("#", ...)
+          if count == 0 then return get(source) end
+
+          local labels = Strings.__zh_cn_stat_argument_labels or {}
+          local position = (Strings.__zh_cn_stat_argument_positions or {})[source]
+          local value = position and select(position, ...)
+          if type(value) == "string" and labels[value] then
+            local args = { ... }
+            args[position] = Strings.lookup(value)
+            return get(source, unpack_(args, 1, count))
+          end
+          return get(source, ...)
+        end
+        Strings.__zh_cn_stat_argument_compat = true
+      end
+
+      local okFont, Font = pcall(require, "src.render.Font")
+      if okFont and type(Font) == "table" and type(Font.draw) == "function" then
+        Font.__zh_cn_stat_labels = statLabelSources
+        Font.__zh_cn_status_labels = statusLabels
+        Font.__zh_cn_translate_ui_label = function(text, source, x, y)
+          -- Font is a process-wide module and this wrapper intentionally
+          -- survives dev hot reloads. If zh_cn is no longer in the merged
+          -- string catalogue, become an identity function instead of leaving
+          -- Chinese status labels behind after a hot-disable.
+          if Strings.lookup("ATTACK") == "ATTACK" then return text end
+          source = tostring(source or ""):gsub("\\", "/")
+          local stats = Font.__zh_cn_stat_labels or {}
+          local statuses = Font.__zh_cn_status_labels or {}
+          local rawStatus = type(text) == "string"
+              and text:match("^ ([A-Z][A-Z][A-Z])$")
+          local function from(suffix)
+            return source:sub(-#suffix) == suffix
+          end
+
+          local statBoxRow = x == 88
+              and (y == 24 or y == 40 or y == 56 or y == 72)
+          if stats[text] and statBoxRow
+              and from("src/battle/BattleState.lua") then
+            -- Level-up StatBox only. A nickname "ATTACK" drawn anywhere
+            -- else is intentionally left untouched.
+            return Strings.lookup(text)
+          elseif (statuses[text] or text == "OK")
+              and ((x == 128 and y == 48
+                    and from("src/ui/SummaryMenu.lua"))
+                   or (x == 136 and from("src/ui/PartyMenu.lua"))) then
+            return statuses[text] or Strings.lookup(text)
+          elseif statuses[rawStatus] and from("src/ui/Menu.lua") then
+            -- Viridian School blackboard stores its five headings with a
+            -- leading blank. Preserve that blank in the localized menu.
+            return " " .. statuses[rawStatus]
+          elseif text == " QUIT" and from("src/ui/Menu.lua") then
+            return " " .. Strings.lookup("QUIT")
+          end
+          return text
+        end
+        if not Font.__zh_cn_ui_label_compat then
+          local draw = Font.draw
+          local function callerPath()
+            if not (debug and debug.getinfo) then return "" end
+            local info = debug.getinfo(3, "S")
+            return tostring(info and info.source or ""):gsub("\\", "/")
+          end
+          Font.draw = function(text, x, y, ...)
+            local translate = Font.__zh_cn_translate_ui_label
+            if type(translate) == "function" then
+              text = translate(text, callerPath(), x, y)
+            end
+            return draw(text, x, y, ...)
+          end
+          Font.__zh_cn_ui_label_compat = true
+        end
+      elseif not okFont then
+        mod.log:warn("无法加载能力与状态标签的字体兼容层: %s",
+                     tostring(Font))
+      end
+    elseif not okStrings then
+      mod.log:warn("无法加载能力标签的动态文本兼容层: %s",
+                   tostring(Strings))
+    end
+  end
 
   -- Gen1Recomp 0.1.56 passes the options footer to OptionRows as the raw
   -- literal "CANCEL", so it never reaches the normal string catalogue.  Keep
