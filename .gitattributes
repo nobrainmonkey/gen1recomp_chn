@@ -1,0 +1,12 @@
+* text=auto eol=lf
+*.lua text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.bdf text eol=lf
+*.png binary
+*.zip binary
+mods/zh_cn/lang/charmap.lua linguist-generated=true
+mods/zh_cn/lang/font.lua linguist-generated=true
+mods/zh_cn/assets/font/*.bdf linguist-vendored=true

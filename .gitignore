@@ -1,0 +1,46 @@
+# ROMs and game/save data
+*.gb
+*.gbc
+*.gba
+*.rom
+*.sgb
+*.bin
+*.dat
+*.bak
+*.sav
+*.srm
+*.state
+pokemon_names.txt
+
+# Locally extracted or generated game data
+mods/*-worksheet/
+*worksheet*/
+english-sources/
+data/generated/
+assets/generated/
+save/
+saves/
+cache/
+backups/
+test-output/
+
+# Build and release output
+dist/
+release/
+*.love
+*.exe
+*.dll
+*.zip
+*.7z
+*.rar
+*.tar
+*.tgz
+*.tar.gz
+
+# Tool caches and local configuration
+__pycache__/
+*.py[cod]
+*.log
+.env
+.env.*
+!.env.example
